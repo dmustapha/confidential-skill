@@ -1,5 +1,5 @@
 # SKILL.md — Zama FHEVM AI Agent Activation File
-<!-- Version: 1.0.0 | FHEVM: v0.12.3 | Package: @fhevm/solidity -->
+<!-- Version: 1.0.0 | FHEVM: v0.11.1 | Package: @fhevm/solidity@0.11.1 -->
 <!-- Dual-Layer Activation Design (DLAD): Quick Start (~30%) + Complete Reference (~70%) -->
 
 ---
@@ -172,7 +172,7 @@ What are you encrypting?
 | euint256 | 0–1.15×10^77 | **NO** | **NO** | **NO** | yes | **NO** | yes | yes |
 | eaddress | address | - | - | - | yes | - | - | yes |
 
-> **Note:** eint (signed) and ebytes types do NOT exist in current @fhevm/solidity. Do not attempt to use them.
+> **Note:** `eint8`–`eint256` (signed) and `ebytes1`–`ebytes256` (byte arrays) are declared as Solidity user-defined types in the `encrypted-types` package, but **no FHE operations are implemented for them in `@fhevm/solidity` v0.11.1** — there are no `FHE.add(eint8, eint8)`, `FHE.eq(ebytes32, ebytes32)`, etc. Do not attempt to use them for computation. Use `euint` with range checks for signed semantics.
 
 ---
 
@@ -731,7 +731,7 @@ async function multiInput(contract: any, userAddress: string, contractAddress: s
 
 ## L2-05 Async Decrypt Deep Reference
 
-### Decryption Architecture (v0.12.3)
+### Decryption Architecture (v0.11.1)
 
 ```
 On-chain flow:
@@ -915,9 +915,9 @@ euint128 sum128 = FHE.add(bigA, FHE.asEuint128(otherValue128));
 uint64 plain = TFHE.decrypt(encValue);  // COMPILE ERROR
 
 // WRONG: Old Oracle pattern — removed in v0.9
-// TFHE.requestDecryption(...) does not exist in v0.12.3
+// TFHE.requestDecryption(...) does not exist in v0.11.1
 
-// CORRECT v0.12.3 pattern: mark decryptable, read via relayer SDK off-chain
+// CORRECT v0.11.1 pattern: mark decryptable, read via relayer SDK off-chain
 function makeDecryptable() external {
     FHE.makePubliclyDecryptable(_balances[msg.sender]);
 }
@@ -2047,11 +2047,11 @@ contract My is ZamaEthereumConfig {
 | `externalEuintXX` without `FHE.fromExternal` | Replay attacks |
 | Delete after external call | Reentrancy |
 
-### Types That Exist (v0.12.3)
+### Types That Exist (v0.11.1)
 
 `euint8` `euint16` `euint32` `euint64` `euint128` `euint160` `euint256` `ebool` `eaddress`
 
-**Do NOT exist**: `eint8` `eint16` `eint32` `eint64` (no signed types), `ebytes` `ebytes32` (no bytes types)
+**Declared but non-functional**: `eint8`–`eint256` and `ebytes1`–`ebytes256` are type declarations in `encrypted-types` but have **zero FHE operations** in `@fhevm/solidity` v0.11.1. They cannot be used for computation.
 
 <!-- [CRITIQUE E-3] Full 20-AP pre-submission checklist for Error Prevention criterion -->
 ### AP Pre-Submission Checklist
@@ -2107,4 +2107,4 @@ npx hardhat test      # all tests pass
 
 ---
 
-*SKILL.md — Zama FHEVM AI Agent Activation File | Built for FHEVM v0.12.3 | @fhevm/solidity latest*
+*SKILL.md — Zama FHEVM AI Agent Activation File | Built for @fhevm/solidity v0.11.1 (latest)*

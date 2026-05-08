@@ -1,0 +1,52 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    name: Compile & Test
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: demo/package-lock.json
+
+      - name: Install dependencies
+        working-directory: demo
+        run: npm ci
+
+      - name: Compile contracts
+        working-directory: demo
+        run: npx hardhat compile
+
+      - name: Run tests
+        working-directory: demo
+        run: npx hardhat test
+        env:
+          REPORT_GAS: true
+
+  lint:
+    name: AP Linter
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Run AP linter on demo contracts
+        run: node confidential-skill/tools/ap-lint.js --dir demo/contracts
+        continue-on-error: true

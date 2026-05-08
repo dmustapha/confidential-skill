@@ -1,0 +1,91 @@
+# Zama FHEVM — Windsurf Rules
+# Generated from SKILL.md v1.0.0 | @fhevm/solidity v0.11.1
+# Full reference: ./SKILL.md
+
+## Package (CRITICAL)
+
+```bash
+npm install @fhevm/solidity @zama-fhe/relayer-sdk @openzeppelin/contracts
+```
+
+Import pattern for every FHEVM contract:
+```solidity
+import "@fhevm/solidity/lib/FHE.sol";
+import "@fhevm/solidity/config/ZamaConfig.sol";
+
+contract MyContract is ZamaEthereumConfig {
+    // ...
+}
+```
+
+NEVER import from `fhevm-solidity` — that package is archived (June 2025).
+
+## Types
+
+Usable types in v0.11.1:
+```
+euint8 euint16 euint32 euint64 euint128 euint160 euint256
+ebool eaddress
+externalEuint8..externalEuint256 (ZKPoK inputs)
+```
+
+`eint` and `ebytes` are declared as types but have no FHE operations — do not use.
+`euint256` supports only: `eq`, `ne`, `and`, `or`, `xor`, `select` — no arithmetic.
+
+## ACL Pattern
+
+Every stored handle needs explicit permissions:
+```solidity
+euint64 private encryptedBalance;
+
+function store(externalEuint64 inp, bytes calldata proof) external {
+    euint64 val = FHE.fromExternal(inp, proof);
+    encryptedBalance = val;
+    FHE.allowThis(val);          // required: contract access
+    FHE.allow(val, msg.sender);  // required: user access
+}
+```
+
+## ZKPoK Input Pattern
+
+```solidity
+// Correct: validate with ZKPoK proof
+function transfer(address to, externalEuint64 encAmt, bytes calldata proof) external {
+    euint64 amount = FHE.fromExternal(encAmt, proof);
+    // use amount
+}
+
+// WRONG: never accept raw uint64
+function transfer(address to, uint64 rawAmount) external { ... } // AP-007
+```
+
+## Async Decryption Pattern
+
+```solidity
+// On-chain: mark handle for public decryption
+function reveal() external {
+    FHE.makePubliclyDecryptable(encryptedBalance);
+}
+
+// Off-chain (frontend): read decrypted value
+// const result = await instance.publicDecrypt([handleHex]);
+```
+
+## HCU Budget
+
+Keep per-transaction HCU under 20M global, 5M sequential.
+High-cost ops: euint64 mul=365K, div=715K, rem=716K.
+Silent revert on overflow — no error message.
+
+## Common Mistakes (full list: SKILL.md § L2-06)
+
+| Anti-Pattern | Fix |
+|---|---|
+| `fhevm-solidity` import | Use `@fhevm/solidity` |
+| Missing `ZamaEthereumConfig` | Inherit it |
+| No `FHE.allowThis()` after store | Add immediately after assignment |
+| `euint256` arithmetic | Use `euint128` or lower |
+| Sync decrypt | Use relayer SDK pattern |
+| Encrypted divisor in `FHE.div` | Divisor must be plaintext |
+| Raw uint input | Wrap in `externalEuintXX` + `FHE.fromExternal()` |
+| No reentrancy guard on callback | Add `nonReentrant` |

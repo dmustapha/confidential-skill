@@ -1,0 +1,69 @@
+# Zama FHEVM — Cursor Rules
+# Generated from SKILL.md v1.0.0 | @fhevm/solidity v0.11.1
+# Full reference: ./SKILL.md
+
+## CRITICAL: Package
+
+- ALWAYS use `@fhevm/solidity` — NEVER `fhevm-solidity` (archived June 2025)
+- Install: `npm install @fhevm/solidity @zama-fhe/relayer-sdk @openzeppelin/contracts`
+- Import: `import "@fhevm/solidity/lib/FHE.sol";`
+- Base contract: `import "@fhevm/solidity/config/ZamaConfig.sol";` → inherit `ZamaEthereumConfig`
+
+## CRITICAL: Encrypted Types (v0.11.1)
+
+Use ONLY these types — eint/ebytes are declared but have no operations:
+- `euint8`, `euint16`, `euint32`, `euint64`, `euint128`, `euint160`, `euint256`
+- `ebool`, `eaddress`
+- ZKPoK inputs: `externalEuint8`...`externalEuint256`, `externalEbool`, `externalEaddress`
+
+euint256 restriction: ONLY `eq`, `ne`, `and`, `or`, `xor`, `select` — NO arithmetic.
+
+## CRITICAL: ACL — Every handle needs permissions
+
+After every computation or storage:
+```solidity
+FHE.allowThis(handle);          // contract can use it
+FHE.allow(handle, userAddress); // user can decrypt it
+```
+Missing ACL = handle permanently inaccessible.
+
+## CRITICAL: ZKPoK Inputs
+
+NEVER accept raw uint64 from users — always validate with ZKPoK:
+```solidity
+function deposit(externalEuint64 encryptedAmount, bytes calldata inputProof) external {
+    euint64 amount = FHE.fromExternal(encryptedAmount, inputProof);
+    // now safe to use `amount`
+}
+```
+
+## CRITICAL: Decryption
+
+No synchronous decrypt. Use `FHE.makePubliclyDecryptable` + relayer SDK:
+```solidity
+FHE.makePubliclyDecryptable(handle); // mark for off-chain decryption
+// Frontend reads via: instance.publicDecrypt([handleHex])
+```
+
+## HCU Limits
+
+- Global per tx: 20M HCU
+- Sequential ops: 5M HCU max
+- euint64 mul = 365K HCU, euint64 div = 715K HCU
+- Keep loops short — silent revert on HCU overflow
+
+## Anti-Patterns (AP-001 to AP-020)
+
+AP-001: Wrong package (`fhevm-solidity`) → use `@fhevm/solidity`
+AP-002: Missing `ZamaEthereumConfig` base → inherit it
+AP-003: Missing `FHE.allowThis()` after store → add it
+AP-004: euint256 arithmetic → use euint128 or lower
+AP-005: `TFHE.decrypt()` sync → removed in v0.5, use relayer pattern
+AP-006: `FHE.div(a, encryptedB)` → divisor must be plaintext
+AP-007: Raw uint input without ZKPoK → use `externalEuintXX` + `FHE.fromExternal()`
+AP-008: Callback replay → check `callbackCalled` flag, reset before external call
+AP-010: HCU overflow (silent revert) → stay under 5M sequential
+AP-015: Missing `FHE.isAllowed()` check before decrypt → add the check
+AP-016: Missing reentrancy guard on decrypt callback → add `nonReentrant`
+
+Full AP reference: SKILL.md § L2-06
