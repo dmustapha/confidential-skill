@@ -6,6 +6,8 @@ VERIFY-REPORT.md
 POLISH-REPORT.md
 STRESS-TEST-PLAN.md
 STRESS-TEST-REPORT.md
+TESTING-PLAN.md
+INTEGRATION-TEST-PLAN.md
 PULSE.md
 pipeline-log.md
 config.json
@@ -50,6 +52,12 @@ demo/artifacts/
 demo/cache/
 demo/typechain-types/
 demo/debug-results/
+
+# Video: Remotion dev source (not a deliverable in repo)
+video/
+
+# Demo pipeline state
+.demo-state.json
 
 # OS
 .DS_Store

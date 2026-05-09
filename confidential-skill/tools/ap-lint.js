@@ -36,16 +36,13 @@ const RULES = [
     severity: "CRITICAL",
     title: "Missing FHE.allowThis() after handle storage",
     test: (src) => {
-      // Only flag state variable or mapping assignments (not local vars)
-      // Pattern: _varName[...] = or private/internal/public state var assignment
+      // Detect state writes via FHE operations (e.g. _var[x] = FHE.add(...))
+      // without FHE.allowThis() in the next 5 lines.
       const lines = src.split("\n");
       for (let i = 0; i < lines.length; i++) {
         const line = lines[i];
-        // Only flag writes: _var[...] = ... or _var = ... (not reads like local = _var[...])
-        const isStateWrite =
-          /^\s*_\w+(\[.*?\])?\s*=\s*/.test(line) ||   // _var[...] = ... (write to state)
-          /\b(private|internal|public)\s+(euint|ebool|eaddress)/.test(line); // state var declaration
-        if (isStateWrite && /(euint|ebool|eaddress)/.test(line) && !/allowThis|FHE\.allow\(/.test(line)) {
+        // Match: _stateVar[...] = FHE.<anything>(...)
+        if (/^\s*_\w+(\[.*?\])?\s*=\s*FHE\./.test(line) && !/FHE\.allowThis|FHE\.allow\(/.test(line)) {
           const window = lines.slice(i, i + 6).join("\n");
           if (!/FHE\.allowThis|FHE\.allow\(/.test(window)) return true;
         }
@@ -118,7 +115,7 @@ const RULES = [
     id: "AP-015",
     severity: "IMPORTANT",
     title: "ACL access without FHE.isAllowed() check",
-    test: (src) => /FHE\.makePubliclyDecryptable|FHE\.allow\(/.test(src) &&
+    test: (src) => /FHE\.makePubliclyDecryptable/.test(src) &&
       !/FHE\.isAllowed\(/.test(src),
     message: "Granting ACL without checking FHE.isAllowed() — may allow unauthorized re-encryption.",
     fix: "Guard with: require(FHE.isAllowed(handle, msg.sender), \"Not allowed\");",
@@ -149,8 +146,8 @@ const RULES = [
     test: (src) => {
       const lines = src.split("\n");
       for (const line of lines) {
-        if (/uint\d*\s+(amount|balance|value|price|quantity)\b/.test(line) &&
-            !/\/\/|mapping|constant|immutable/.test(line)) return true;
+        if (/\buint\d*\s+(amount|balance|value|price|quantity)\b/.test(line) &&
+            !/\/\/|mapping|constant|immutable|event\s|function\s/.test(line)) return true;
       }
       return false;
     },

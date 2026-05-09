@@ -50,7 +50,7 @@ contract ConfidentialERC20 is ZamaEthereumConfig, ReentrancyGuard, Pausable, Own
         // AP-007: Always validate ZKPoK proof via FHE.fromExternal
         euint64 amount = FHE.fromExternal(encryptedAmount, inputProof);
 
-        // AP-008: Underflow guard — transfer 0 if sender has insufficient balance
+        // Underflow guard — transfer 0 if sender has insufficient balance (FHE-native pattern)
         euint64 senderBal = _balances[msg.sender];
         ebool hasEnough = FHE.le(amount, senderBal);
         euint64 xferAmount = FHE.select(hasEnough, amount, FHE.asEuint64(0));

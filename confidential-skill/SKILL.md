@@ -83,6 +83,7 @@ pragma solidity ^0.8.24;
 // REQUIRED: Both imports needed for every FHEVM contract
 import "@fhevm/solidity/lib/FHE.sol";            // FHE operations, types, ACL
 import "@fhevm/solidity/config/ZamaConfig.sol";  // Network auto-detection
+// NOTE: the file is ZamaConfig.sol — the class it exports is ZamaEthereumConfig
 ```
 
 ### Base Contract Pattern (mandatory)
@@ -1649,6 +1650,7 @@ contract SealedBidAuction is ZamaEthereumConfig, Ownable, ReentrancyGuard {
         eaddress newHighder = FHE.select(isHigher,
             FHE.asEaddress(msg.sender), _highestBidder);
 
+        bool isNewBidder = euint64.unwrap(_bids[msg.sender]) == 0; // capture BEFORE assignment
         _bids[msg.sender]  = bid;
         _highestBid        = newHighBid;
         _highestBidder     = newHighder;
@@ -1660,13 +1662,15 @@ contract SealedBidAuction is ZamaEthereumConfig, Ownable, ReentrancyGuard {
         FHE.allow(newHighBid, owner());
         FHE.allow(newHighder, owner());
 
-        if (euint64.unwrap(_bids[msg.sender]) == 0) bidders.push(msg.sender);
+        if (isNewBidder) bidders.push(msg.sender);
         emit BidPlaced(msg.sender);
     }
 
     function revealWinner() external onlyOwner {
         require(block.timestamp >= auctionEnd, "Auction not ended");
         require(!revealed, "Already revealed");
+        // AP-015: verify contract has ACL access before making handle public
+        require(FHE.isAllowed(_highestBid, address(this)), "Not allowed");
         revealed = true;
         FHE.makePubliclyDecryptable(_highestBid);
         FHE.makePubliclyDecryptable(_highestBidder);
@@ -1675,6 +1679,8 @@ contract SealedBidAuction is ZamaEthereumConfig, Ownable, ReentrancyGuard {
 
     function revealMyBid() external {
         require(block.timestamp >= auctionEnd, "Auction not ended");
+        // AP-015: verify caller has ACL access before making handle public
+        require(FHE.isAllowed(_bids[msg.sender], msg.sender), "Not allowed");
         FHE.makePubliclyDecryptable(_bids[msg.sender]);
     }
 }
@@ -1697,7 +1703,7 @@ import "@openzeppelin/contracts/access/Ownable.sol";
 contract ConfidentialVote is ZamaEthereumConfig, Ownable {
     uint256 public voteEnd;
     uint256 public optionCount;
-    bool    public tallied;
+    mapping(uint256 => bool) public tallied; // option → has been publicly revealed
 
     mapping(address => bool)    public hasVoted;
     mapping(uint256 => euint32) private _tallies; // option → encrypted tally
@@ -1740,6 +1746,10 @@ contract ConfidentialVote is ZamaEthereumConfig, Ownable {
     function revealTally(uint256 optionIndex) external onlyOwner {
         require(block.timestamp >= voteEnd, "Voting not ended");
         require(optionIndex < optionCount, "Invalid option");
+        require(!tallied[optionIndex], "Already revealed");
+        // AP-015: verify contract has ACL access before making handle public
+        require(FHE.isAllowed(_tallies[optionIndex], address(this)), "Not allowed");
+        tallied[optionIndex] = true;
         FHE.makePubliclyDecryptable(_tallies[optionIndex]);
         emit TallyRevealed(optionIndex);
     }
@@ -1840,32 +1850,70 @@ describe("MyToken — local hardhat (non-FHE)", function () {
 
 ### Pattern B — Sepolia Fork Tests (actual FHE operations)
 
+**Critical constraint:** FHE operations only succeed on fork for contracts that were **already deployed on real Sepolia**. The coprocessor ACL at `0xe3a9105a3a932253a70f126eb1e3b589c643dd24` only recognises contracts registered via a live Sepolia deployment. Fresh Hardhat fork deploys are not registered and will revert with `"Transaction reverted without a reason string"` on any FHE call.
+
+**Correct approach:** Impersonate the original deployer and call the already-deployed Sepolia contract:
+
 ```typescript
-// test/MyToken.fork.test.ts
-// Run with: npx hardhat test --network hardhatFork
+// test/MyToken.deployed.fork.test.ts
+// Tests the ALREADY-DEPLOYED contract — do NOT deploy fresh
+// Run with: FORK=true npx hardhat test
 import { expect } from "chai";
-import { ethers } from "hardhat";
+import hre, { ethers } from "hardhat";
 
-describe("MyToken — Sepolia fork (FHE ops)", function () {
-  let token: any;
-  let owner: any, alice: any;
+const DEPLOYED_ADDRESS = "0x<your-deployed-contract-address>";
+const DEPLOYER_ADDRESS = "0x<original-deployer-address>";
 
-  beforeEach(async () => {
-    [owner, alice] = await ethers.getSigners();
+function requireFork(ctx: Mocha.Context) {
+  if (process.env.FORK !== "true") ctx.skip();
+}
+
+describe("MyToken — Deployed Contract Fork Tests", function () {
+  this.timeout(120_000);
+
+  before(function () { requireFork(this); });
+
+  it("FHE.asEuint64 created a real ciphertext handle (non-zero)", async () => {
+    // Attach to the DEPLOYED contract — already registered with coprocessor
+    const token = await ethers.getContractAt("MyToken", DEPLOYED_ADDRESS);
+    const handle = await token.balanceOf(DEPLOYER_ADDRESS);
+    expect(handle).to.not.equal(0n);
+  });
+
+  it("owner can call FHE.makePubliclyDecryptable on deployed contract", async () => {
+    // Impersonate deployer — fund with test ETH then call the FHE operation
+    await hre.network.provider.request({
+      method: "hardhat_impersonateAccount",
+      params: [DEPLOYER_ADDRESS],
+    });
+    await hre.network.provider.send("hardhat_setBalance", [
+      DEPLOYER_ADDRESS,
+      "0x56BC75E2D63100000", // 100 ETH
+    ]);
+    const owner = await ethers.getImpersonatedSigner(DEPLOYER_ADDRESS);
+    const token = await ethers.getContractAt("MyToken", DEPLOYED_ADDRESS, owner);
+
+    // FHE.makePubliclyDecryptable succeeds because contract is coprocessor-registered
+    await expect(token.connect(owner).makeMyBalanceDecryptable()).to.not.be.reverted;
+  });
+});
+```
+
+**Non-FHE guards CAN use fresh deploys** — access control, Pausable, and interface checks work without the coprocessor:
+
+```typescript
+// test/MyToken.fork.test.ts — non-FHE guards only
+describe("MyToken — Fork Tests (non-FHE guards)", function () {
+  before(function () { requireFork(this); });
+
+  it("non-owner cannot mint (Ownable fires before FHE op)", async () => {
+    const [, alice] = await ethers.getSigners();
     const F = await ethers.getContractFactory("MyToken");
-    token = await F.deploy("MyToken", "MTK");
+    const token = await F.deploy("MyToken", "MTK");
     await token.waitForDeployment();
-  });
-
-  it("owner can mint (FHE.asEuint64 works on fork)", async () => {
-    // Coprocessor precompile is available on Sepolia fork
-    await expect(token.connect(owner).mint(alice.address, 1000n)).to.not.be.reverted;
-  });
-
-  it("balanceOf returns valid encrypted handle after mint", async () => {
-    await token.connect(owner).mint(alice.address, 1000n);
-    const handle = await token.balanceOf(alice.address);
-    expect(handle).to.not.equal(0n); // non-zero handle means ciphertext exists
+    // Ownable check fires BEFORE mint() reaches any FHE call — safe to test fresh
+    await expect(token.connect(alice).mint(alice.address, 1000n))
+      .to.be.revertedWithCustomError(token, "OwnableUnauthorizedAccount");
   });
 });
 ```
@@ -2034,7 +2082,10 @@ contract My is ZamaEthereumConfig {
         FHE.allowThis(v);
         FHE.allow(v, msg.sender);
     }
-    function reveal() external { FHE.makePubliclyDecryptable(_v[msg.sender]); }
+    function reveal() external {
+        require(FHE.isAllowed(_v[msg.sender], msg.sender), "Not allowed");
+        FHE.makePubliclyDecryptable(_v[msg.sender]);
+    }
 }
 ```
 
@@ -2103,9 +2154,12 @@ decryptable. Use the correct @fhevm/solidity import.
 
 **Validation commands:**
 ```bash
-npx hardhat compile   # 0 errors expected
-npx hardhat test      # all tests pass
+npx hardhat compile              # 0 errors expected
+npx hardhat test                 # all tests pass
+node ../confidential-skill/tools/ap-lint.js --dir contracts/   # 0 AP violations expected
 ```
+
+**AP linter** (`tools/ap-lint.js`) — statically detects 14 of 20 anti-patterns (AP-008, 010, 011, 014, 017, 018 require manual review). Run from `demo/` or pass `--dir` to any contracts directory. Exit code 0 = clean, 1 = warnings, 2 = critical violations.
 
 **Live demo contract:** `0xb3ec6C97420b1495C1979d628D9fDC0B89Bce406` on Sepolia (chainId 11155111)
 

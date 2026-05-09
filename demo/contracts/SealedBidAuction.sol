@@ -64,6 +64,8 @@ contract SealedBidAuction is ZamaEthereumConfig, Ownable, ReentrancyGuard {
     function revealWinner() external onlyOwner {
         require(block.timestamp >= auctionEnd, "Auction not ended");
         require(!revealed, "Already revealed");
+        // AP-015: verify contract has ACL access before making handles public
+        require(FHE.isAllowed(_highestBid, address(this)), "Not allowed");
         revealed = true;
         FHE.makePubliclyDecryptable(_highestBid);
         FHE.makePubliclyDecryptable(_highestBidder);
@@ -72,6 +74,8 @@ contract SealedBidAuction is ZamaEthereumConfig, Ownable, ReentrancyGuard {
 
     function revealMyBid() external {
         require(block.timestamp >= auctionEnd, "Auction not ended");
+        // AP-015: caller must have ACL access to their bid handle
+        require(FHE.isAllowed(_bids[msg.sender], msg.sender), "Not allowed");
         FHE.makePubliclyDecryptable(_bids[msg.sender]);
     }
 }

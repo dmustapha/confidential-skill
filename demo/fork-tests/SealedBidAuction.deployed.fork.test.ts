@@ -106,9 +106,19 @@ describe("SealedBidAuction — Deployed Contract Fork Tests (Tier 2)", function 
   // -------------------------------------------------------------------------
   describe("FHE-T2-A002: revealWinner() guard — auction not ended", function () {
     it("should revert before auctionEnd", async function () {
+      const auction = await ethers.getContractAt("SealedBidAuction", DEPLOYED_ADDRESS);
+      const auctionEnd = await auction.auctionEnd();
+      const block = await ethers.provider.getBlock("latest");
+      if (!block || BigInt(block.timestamp) >= auctionEnd) {
+        // Deployed auction has already ended on this fork — the "Auction not ended"
+        // guard can no longer fire. Skip rather than calling revealWinner() and
+        // mutating revealed=true which would break subsequent tests.
+        this.skip();
+        return;
+      }
       const owner = await impersonateDeployer();
-      const auction = await ethers.getContractAt("SealedBidAuction", DEPLOYED_ADDRESS, owner);
-      await expect(auction.revealWinner()).to.be.revertedWith("Auction not ended");
+      const auctionAsOwner = await ethers.getContractAt("SealedBidAuction", DEPLOYED_ADDRESS, owner);
+      await expect(auctionAsOwner.revealWinner()).to.be.revertedWith("Auction not ended");
     });
   });
 

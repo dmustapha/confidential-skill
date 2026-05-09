@@ -134,8 +134,6 @@ describe("ConfidentialVote — Deployed Contract Fork Tests (Tier 2)", function 
   // NOTE: This deployed contract has a 24h voting window (86400s). Since it
   // was deployed more than 24h before these tests run, block.timestamp >=
   // voteEnd — the "Voting not ended" guard can no longer fire on this instance.
-  // The guard itself is covered by ConfidentialVote.fork.test.ts which creates
-  // a fresh fork environment with evm_increaseTime to simulate both sides.
   // This test verifies the contract state (voteEnd > 0) as a sanity check.
   // -------------------------------------------------------------------------
   describe("FHE-T2-V003: voteEnd is initialized (constructor ran correctly)", function () {

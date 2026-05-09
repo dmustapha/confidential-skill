@@ -52,6 +52,8 @@ contract ConfidentialVote is ZamaEthereumConfig, Ownable {
         require(block.timestamp >= voteEnd, "Voting not ended");
         require(optionIndex < optionCount, "Invalid option");
         require(!tallied[optionIndex], "Already revealed");
+        // AP-015: verify contract has ACL access before making handle public
+        require(FHE.isAllowed(_tallies[optionIndex], address(this)), "Not allowed");
         tallied[optionIndex] = true;
         FHE.makePubliclyDecryptable(_tallies[optionIndex]);
         emit TallyRevealed(optionIndex);

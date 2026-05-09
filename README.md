@@ -4,7 +4,7 @@ A production-ready reference document that enables AI coding agents (Claude Code
 
 [![Solidity](https://img.shields.io/badge/Solidity-0.8.24-363636?logo=solidity)](https://soliditylang.org/)
 [![FHEVM](https://img.shields.io/badge/@fhevm/solidity-0.11.1-purple)](https://www.npmjs.com/package/@fhevm/solidity)
-[![Tests](https://img.shields.io/badge/tests-22%20passing-brightgreen)]()
+[![Tests](https://img.shields.io/badge/tests-67%20passing-brightgreen)]()
 [![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 
 ---
@@ -20,8 +20,11 @@ The result: an agent that reads this file generates compilable, deployable FHEVM
 ## Contents
 
 ```
-confidential-skill/SKILL.md   Main skill document (2110 lines)
-demo/                        Working ConfidentialERC20 on Sepolia (proves patterns compile)
+confidential-skill/
+  SKILL.md          AI agent skill document (2150+ lines, 20 APs, 3 templates)
+  tools/
+    ap-lint.js      Static linter — detects 14 of 20 AP violations statically
+demo/               Working contracts on Sepolia (proves patterns compile and run)
 ```
 
 ---
@@ -36,6 +39,7 @@ The skill document covers:
 - **3 contract templates** — ConfidentialERC20, SealedBidAuction, ConfidentialVote
 - **L2-12 Frontend integration** — relayer init, encrypted input binding, React hooks
 - **20-item pre-submission checklist** — AP codes in checkbox format
+- **AP linter** (`tools/ap-lint.js`) — statically detects 14 of 20 anti-patterns (AP-008, 010, 011, 014, 017, 018 require manual review); scans any Solidity directory
 
 ### Using the Skill
 
@@ -79,14 +83,16 @@ Contract name: `ConfidentialToken` — verified via `eth_call` on Sepolia.
 ```bash
 cd demo
 npm install
+npx hardhat compile
 npx hardhat test
+npm run lint        # AP linter — 0 violations expected
 ```
 
 ```
-22 passing (642ms)
+67 passing (non-fork)
 ```
 
-Tests cover access control, pause invariants, deployment edge cases, and documented FHE behavior on local Hardhat (coprocessor operations revert as expected without Sepolia fork).
+Tests cover access control, pause invariants, deployment edge cases, and documented FHE behavior on local Hardhat (coprocessor operations revert as expected without Sepolia fork). Fork tests require `SEPOLIA_RPC_URL` and run via `npm run test:fork`.
 
 ---
 
@@ -138,17 +144,22 @@ FHE.allowThis(balance);             // contract retains access
 
 ```
 confidential-skill/
-  SKILL.md                 AI agent skill document (2110 lines, 20 APs, 3 templates)
+  SKILL.md                       AI agent skill document (2150+ lines, 20 APs, 3 templates)
+  tools/
+    ap-lint.js                   Static linter — detects 14 of 20 AP violations statically
 
 demo/
   contracts/
-    ConfidentialERC20.sol  Reference implementation
-    SealedBidAuction.sol   Auction template
-    ConfidentialVote.sol   Voting template
+    ConfidentialERC20.sol        Reference implementation (encrypted balances + ZKPoK)
+    SealedBidAuction.sol         Auction template (encrypted bids)
+    ConfidentialVote.sol         Voting template (encrypted tallies)
   test/
-    ConfidentialERC20.test.ts   Core tests (5)
-    debug-p5-edge-cases.test.ts Edge case + security tests (13)
-    stress-extra.test.ts        Compilation + FHE behavior tests (4)
+    ConfidentialERC20.test.ts    Core tests
+    debug-p5-edge-cases.test.ts  Edge case + security tests
+    stress-extra.test.ts         Compilation + FHE behavior tests
+    skill-validation.test.ts     SKILL.md structural integrity (20 APs present)
+    skill-linter.test.ts         ap-lint.js functional tests (21 checks)
+  fork-tests/                    Sepolia fork tests (requires SEPOLIA_RPC_URL + FORK=true)
   hardhat.config.ts
   .env.example
 ```
