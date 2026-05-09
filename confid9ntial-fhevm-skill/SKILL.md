@@ -2156,7 +2156,7 @@ decryptable. Use the correct @fhevm/solidity import.
 ```bash
 npx hardhat compile              # 0 errors expected
 npx hardhat test                 # all tests pass
-node ../confidential-skill/tools/ap-lint.js --dir contracts/   # 0 AP violations expected
+node ../confid9ntial-fhevm-skill/tools/ap-lint.js --dir contracts/   # 0 AP violations expected
 ```
 
 **AP linter** (`tools/ap-lint.js`) — statically detects 14 of 20 anti-patterns (AP-008, 010, 011, 014, 017, 018 require manual review). Run from `demo/` or pass `--dir` to any contracts directory. Exit code 0 = clean, 1 = warnings, 2 = critical violations.

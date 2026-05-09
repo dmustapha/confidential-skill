@@ -7,7 +7,7 @@
     "test": "npx hardhat test",
     "test:fork": "FORK=true npx hardhat test fork-tests/ConfidentialERC20.fork.test.ts fork-tests/ConfidentialERC20.deployed.fork.test.ts fork-tests/SealedBidAuction.deployed.fork.test.ts fork-tests/ConfidentialVote.deployed.fork.test.ts",
     "deploy:sepolia": "npx hardhat run scripts/deploy.ts --network sepolia",
-    "lint": "node ../confidential-skill/tools/ap-lint.js --dir contracts/"
+    "lint": "node ../confid9ntial-fhevm-skill/tools/ap-lint.js --dir contracts/"
   },
   "devDependencies": {
     "hardhat": "^2.22.0",

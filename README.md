@@ -20,7 +20,7 @@ The result: an agent that reads this file generates compilable, deployable FHEVM
 ## Contents
 
 ```
-confidential-skill/
+confid9ntial-fhevm-skill/
   SKILL.md          AI agent skill document (2150+ lines, 20 APs, 3 templates)
   tools/
     ap-lint.js      Static linter — detects 14 of 20 AP violations statically
@@ -143,7 +143,7 @@ FHE.allowThis(balance);             // contract retains access
 ## Project Structure
 
 ```
-confidential-skill/
+confid9ntial-fhevm-skill/
   SKILL.md                       AI agent skill document (2150+ lines, 20 APs, 3 templates)
   tools/
     ap-lint.js                   Static linter — detects 14 of 20 AP violations statically
@@ -169,8 +169,8 @@ demo/
 ## Running Locally
 
 ```bash
-git clone https://github.com/dmustapha/confidential-skill
-cd confidential-skill/demo
+git clone https://github.com/dmustapha/confid9ntial-fhevm-skill
+cd confid9ntial-fhevm-skill/demo
 npm install
 npx hardhat compile
 npx hardhat test

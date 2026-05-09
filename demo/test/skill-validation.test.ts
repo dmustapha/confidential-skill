@@ -12,7 +12,7 @@ import { expect } from "chai";
 import * as fs from "fs";
 import * as path from "path";
 
-const SKILL_PATH = path.resolve(__dirname, "../../confidential-skill/SKILL.md");
+const SKILL_PATH = path.resolve(__dirname, "../../confid9ntial-fhevm-skill/SKILL.md");
 const SKILL_CONTENT = fs.readFileSync(SKILL_PATH, "utf8");
 
 describe("SKILL.md — Structural Validation", function () {

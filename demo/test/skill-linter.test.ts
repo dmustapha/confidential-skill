@@ -23,7 +23,7 @@ import { execSync } from "child_process";
 // Paths
 // ---------------------------------------------------------------------------
 
-const LINTER = path.resolve(__dirname, "../../confidential-skill/tools/ap-lint.js");
+const LINTER = path.resolve(__dirname, "../../confid9ntial-fhevm-skill/tools/ap-lint.js");
 const DEMO_CONTRACTS = path.resolve(__dirname, "../contracts");
 const TMP_DIR = path.resolve(__dirname, "../tmp-lint-fixtures");
 
