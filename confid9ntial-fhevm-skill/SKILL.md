@@ -348,11 +348,12 @@ contract DecryptExample is ZamaEthereumConfig {
         // Verify the caller has ACL access first
         require(FHE.isAllowed(bal, msg.sender), "No ACL access to this handle");
         FHE.makePubliclyDecryptable(bal);
-        // Emitting the handle hex helps clients find it
+        // Emitting the handle helps clients find it off-chain
+        // NOTE: euint64.unwrap() returns bytes32, not uint256 — event must use bytes32
         emit BalanceDecryptable(msg.sender, euint64.unwrap(bal));
     }
 
-    event BalanceDecryptable(address indexed owner, uint256 handleId);
+    event BalanceDecryptable(address indexed owner, bytes32 handleId);
 }
 ```
 
@@ -375,7 +376,7 @@ async function decryptBalance(
 
   // Step 2: Extract handle from event log
   const event = receipt.logs.find((log: any) =>
-    log.topics[0] === ethers.id("BalanceDecryptable(address,uint256)")
+    log.topics[0] === ethers.id("BalanceDecryptable(address,bytes32)")
   );
   const handleHex = "0x" + event.data.slice(-64);
 
