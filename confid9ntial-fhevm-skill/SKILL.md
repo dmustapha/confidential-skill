@@ -2057,6 +2057,9 @@ Use when the user wants to read **their own private data** (balance, vote, bid) 
 // The FHE.allow() you already grant for ACL access is all that's needed.
 // Do NOT call FHE.makePubliclyDecryptable — that would expose the value to everyone.
 function _mintTo(address user, euint64 amount) internal {
+    // NOTE: assumes _balances[user] is already initialized (has a valid handle with ACL).
+    // For first-ever mint (zero handle), initialize with: _balances[user] = FHE.asEuint64(0)
+    // then call FHE.allowThis + FHE.allow before storing — see AP-003.
     euint64 newBal = FHE.add(_balances[user], amount);
     FHE.allowThis(newBal);
     FHE.allow(newBal, user);   // ← this is the only requirement for userDecrypt
@@ -2183,22 +2186,37 @@ const tier    = result[tierHandleHex]    as bigint;
 ### React Hook Pattern
 
 Two variants depending on whether the value is private to the user or publicly revealed.
+Both hooks accept a pre-instantiated `ethers.Contract` — create it outside with `useMemo`.
 
 ```typescript
+import { useState, useEffect, useMemo } from "react";
+import { useAccount } from "wagmi";
+import { ethers } from "ethers";
+import { createInstance, SepoliaConfig } from "@zama-fhe/relayer-sdk";
+
+const BALANCE_OF_ABI = ["function balanceOf(address account) view returns (uint256)"];
+
 // Variant A: user-private decrypt (balance stays private — user signs EIP-712)
-export function usePrivateBalance(contractAddress: string) {
+// contract: ethers.Contract with balanceOf view function
+// signer: ethers.Signer connected to user wallet
+export function usePrivateBalance(
+  contract: ethers.Contract,
+  contractAddress: string,
+  signer: ethers.Signer | null
+) {
   const [balance, setBalance] = useState<bigint | null>(null);
   const { address } = useAccount();  // wagmi
-  const signer = useEthersSigner();  // wagmi + ethers adapter
 
   useEffect(() => {
     if (!address || !signer) return;
+    const userAddress = address;  // capture for async closure (TypeScript narrowing)
     (async () => {
       const instance = await createInstance({ ...SepoliaConfig, network: window.ethereum });
-      // 1. Read raw handle from contract view function
-      const rawHandle = await contract.balanceOf(address); // returns uint256
+      // 1. Read raw handle from contract view function (returns uint256 / bigint)
+      const rawHandle: bigint = await contract.balanceOf(userAddress);
+      // CRITICAL: must be 32-byte hex — not toString() or padStart
       const handleHex = ethers.toBeHex(rawHandle, 32);
-      // 2. EIP-712 sign + userDecrypt (no on-chain tx needed)
+      // 2. EIP-712 sign + userDecrypt (no on-chain tx — just a relayer HTTP call)
       const keypair = instance.generateKeypair();
       const ts = Math.floor(Date.now() / 1000).toString();
       const eip712 = instance.createEIP712(keypair.publicKey, [contractAddress], ts, "10");
@@ -2209,29 +2227,38 @@ export function usePrivateBalance(contractAddress: string) {
       );
       const result = await instance.userDecrypt(
         [{ handle: handleHex, contractAddress }],
-        keypair.privateKey, keypair.publicKey,
-        sig.replace("0x", ""), [contractAddress], address, ts, "10",
+        keypair.privateKey,
+        keypair.publicKey,
+        sig.replace("0x", ""),  // strip 0x prefix
+        [contractAddress],
+        userAddress,
+        ts,
+        "10",
       );
       setBalance(result[handleHex] as bigint);
     })();
-  }, [address, contractAddress]);
+  }, [address, contractAddress, signer]);
 
   return balance;
 }
 
 // Variant B: public decrypt (contract called FHE.makePubliclyDecryptable — value is public)
-export function usePublicBalance(contractAddress: string) {
+export function usePublicBalance(
+  contract: ethers.Contract,
+  contractAddress: string
+) {
   const [balance, setBalance] = useState<bigint | null>(null);
   const { address } = useAccount();
 
   useEffect(() => {
     if (!address) return;
+    const userAddress = address;
     (async () => {
       const instance = await createInstance({ ...SepoliaConfig, network: window.ethereum });
-      // 1. Read handle
-      const rawHandle = await contract.balanceOf(address);
+      // 1. Read handle — contract must have called FHE.makePubliclyDecryptable already
+      const rawHandle: bigint = await contract.balanceOf(userAddress);
       const handleHex = ethers.toBeHex(rawHandle, 32);
-      // 2. publicDecrypt — no signature needed, value is already public
+      // 2. publicDecrypt — no signature, no on-chain tx; result is { clearValues, ... }
       const result = await instance.publicDecrypt([handleHex]);
       setBalance(result.clearValues[handleHex] as bigint);
     })();
@@ -2239,6 +2266,12 @@ export function usePublicBalance(contractAddress: string) {
 
   return balance;
 }
+
+// Usage:
+// const provider = new ethers.BrowserProvider(window.ethereum);
+// const signer = await provider.getSigner();
+// const contract = new ethers.Contract(CONTRACT_ADDRESS, BALANCE_OF_ABI, provider);
+// const balance = usePrivateBalance(contract, CONTRACT_ADDRESS, signer);
 ```
 
 ### Common Frontend Anti-Patterns
